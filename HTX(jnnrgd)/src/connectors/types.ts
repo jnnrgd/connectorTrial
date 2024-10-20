@@ -1,11 +1,3 @@
-import {
-    BalanceRequest,
-    BalanceResponse,
-    BatchOrdersRequest,
-    CancelOrdersRequest,
-    OpenOrdersRequest,
-    OrderStatusUpdate,
-} from "./private/types";
 import type WebSocket from "ws";
 
 
@@ -78,7 +70,10 @@ export interface Ticker extends Serializable {
     timestamp: number;
 }
 
-type Side = 'Buy' | 'Sell';
+export enum Side {
+    BUY = 'Buy',
+    SELL = 'Sell',
+}
 
 export interface Trade extends Serializable {
     symbol: string;
@@ -149,4 +144,132 @@ export interface HtxTrade {
     ch: string;
     ts: number;
     tick: HtxTradeTick;
+}
+
+
+export interface BalanceRequest {
+
+}
+export interface BalanceResponse {
+    event: string,
+    symbol: string,
+    baseBalance: number,
+    quoteBalance: number,
+    inventory: number,
+    timestamp: number
+}
+export interface OpenOrdersRequest {
+
+}
+export interface OrderStatusUpdate {
+    event: string,
+    connectorType: string,
+    symbol:  string,
+    orderId: number,
+    sklOrderId: string,
+    state: string,
+    side: string,
+    price: number,
+    size: number,
+    notional: number,
+    filled_price: number,
+    filled_size: number,
+    timestamp: number,
+
+}
+
+interface Order {
+    side: Side,
+    price: number,
+    size: number,
+    type: SklOrderType,
+}
+
+export interface BatchOrdersRequest {
+    orders: Order[]
+
+}
+export interface CancelOrdersRequest {
+
+}
+
+export enum SklOrderType {
+    MARKET = 'Market',
+    LIMIT = 'Limit',
+    LIMIT_MAKER = 'LimitMaker',
+    IMMEDIATE_OR_CANCEL = 'ImmediateOrCancel',
+}
+
+export enum HtxOrderType {
+    BUY_MARKET = 'buy-market',
+    SELL_MARKET = 'sell-market',
+    BUY_LIMIT = 'buy-limit',
+    SELL_LIMIT = 'sell-limit',
+    BUY_IOC = 'buy-ioc',
+    SELL_IOC = 'sell-ioc',
+    BUY_LIMIT_MAKER = 'buy-limit-maker',
+    SELL_LIMIT_MAKER = 'sell-limit-maker',
+}
+
+export const htxOrderTypeMap: Record<SklOrderType, Record<Side, HtxOrderType>> = {
+    [SklOrderType.MARKET]: {
+        [Side.BUY]: HtxOrderType.BUY_MARKET,
+        [Side.SELL]: HtxOrderType.SELL_MARKET,
+    },
+    [SklOrderType.LIMIT]: {
+        [Side.BUY]: HtxOrderType.BUY_LIMIT,
+        [Side.SELL]: HtxOrderType.SELL_LIMIT,
+    },
+    [SklOrderType.LIMIT_MAKER]: {
+        [Side.BUY]: HtxOrderType.BUY_LIMIT_MAKER,
+        [Side.SELL]: HtxOrderType.SELL_LIMIT_MAKER,
+    },
+    [SklOrderType.IMMEDIATE_OR_CANCEL]: {
+        [Side.BUY]: HtxOrderType.BUY_IOC,
+        [Side.SELL]: HtxOrderType.SELL_IOC,
+    },
+};
+
+export enum HtxOrderSource {
+    SPOT = 'spot-api',
+    MARGIN = 'margin-api',
+    C2C = 'c2c-marging-api',
+}
+
+
+export interface HtxOrderRequestParams {
+    "account-id": string,
+    symbol: string,
+    type: HtxOrderType,
+    amount: string,
+    price: string,
+    "client-order-id": string,
+    source?: HtxOrderSource,
+    "self-match-prevent"?: number,
+    "stop-price"?: string,
+    operator?: 'gte' | 'lte',
+}
+
+export interface Account{
+    id: number,
+    type: string,
+    subtype: string,
+    state: string,
+}
+
+export interface GetAccountsResponse {
+    status: number,
+    data: Account[],
+}
+
+export interface PostOrderResponse {
+    "client-order-id": string,
+    "order-id"?: number,
+    "err-code"?: string,
+    "err-msg"?: string,
+}
+
+export interface PostBatchOrdersResponse {
+    status: number,
+    data: number[],
 }

@@ -13,6 +13,7 @@ import {
   Trade,
   HtxTradeData,
   HtxEvent,
+  Side,
 } from "../types";
 import {
   getHtxSymbol,
@@ -281,7 +282,7 @@ export class HtxPublicConnector implements PublicExchangeConnector {
         event: SklEvent.Trade,
         price: trade.price,
         size: trade.amount,
-        side: trade.direction === "buy" ? "Buy" : "Sell",
+        side: trade.direction === "buy" ? Side.BUY : Side.SELL,
         timestamp: trade.ts
       }
     });

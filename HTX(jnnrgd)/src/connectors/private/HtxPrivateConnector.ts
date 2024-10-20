@@ -2,12 +2,15 @@ import {
   ConnectorConfiguration,
   ConnectorGroup,
   Credential,
+  GetAccountsResponse,
+  HtxEvent,
+  PostBatchOrdersResponse,
   PrivateExchangeConnector,
   Serializable,
   SIGNATURE_VERSION,
   SignatureMethod,
 } from "../types";
-import { getHtxSymbol, getSklSymbol } from "../utils/utils";
+import { getDateTime, getDefaultQueryParams, getHtxOrderType, getHtxSymbol, getSklSymbol } from "../utils/utils";
 import { v4 as uuidv4 } from 'uuid';
 import {
   BalanceRequest,
@@ -16,14 +19,20 @@ import {
   OrderStatusUpdate,
   BatchOrdersRequest,
   CancelOrdersRequest,
-} from "./types";
+  HtxOrderRequestParams,
+} from "../types";
 import logger from "../utils/logger";
 import WebSocket from 'ws';
 import { WebSocketConnectionError, WebsocketFeedError } from "../errors";
 import { createPrivateKey, KeyObject, sign } from 'crypto';
+import axios, { AxiosInstance, AxiosResponse } from "axios";
+
+const MAX_BATCHH_SIZE = 10;
+
 
 export class HtxPrivateConnector implements PrivateExchangeConnector {
   public connectorId: string;
+  private accountId = 0;
   private exchangeSymbol: string;
   private sklSymbol: string;
   private url: string;
@@ -31,6 +40,8 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
   private accessKey: string;
   private privateKey: KeyObject;
   private topics: string[] = [];
+  private axiosInstance: AxiosInstance;
+  private defaultQueryParams;
 
   constructor(
     private group: ConnectorGroup,
@@ -57,10 +68,27 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
       "accounts.update#0",
       `orders#${this.exchangeSymbol}`
     ];
+
+    this.axiosInstance = axios.create({
+      baseURL: `https://${this.config.wsAddress}`,
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 5000,
+    })
+
+    this.defaultQueryParams = {
+      AccessKeyId: this.accessKey,
+      SignatureMethod: SignatureMethod.Ed25519,
+      SignatureVersion: SIGNATURE_VERSION,
+    };
+
   }
 
   public async connect(onMessage: (m: Serializable[]) => void, socket?: WebSocket): Promise<void> {
     try {
+      this.accountId = await this.getAccountId();
+
       await this.initializeWebsocket(socket);
       this.setupWsHandlers(onMessage);
     }
@@ -81,9 +109,33 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
   getCurrentActiveOrders(request: OpenOrdersRequest): Promise<OrderStatusUpdate[]> {
     throw new Error("Method not implemented.");
   }
-  placeOrders(request: BatchOrdersRequest): Promise<any> {
-    throw new Error("Method not implemented.");
+
+  public async placeOrders(request: BatchOrdersRequest): Promise<void> {
+    if (request.orders.length > MAX_BATCHH_SIZE) {
+      throw new Error(`Batch size exceeds maximum of ${MAX_BATCHH_SIZE}`);
+    }
+
+    const orders: HtxOrderRequestParams[] = request.orders.map(order => {
+      const orderParams: HtxOrderRequestParams = {
+        symbol: this.exchangeSymbol,
+        type: getHtxOrderType(order.type, order.side),
+        price: order.price.toString(),
+        amount: order.size.toString(),
+        "account-id": this.accountId.toString(),
+        "client-order-id": uuidv4(),
+      };
+      return orderParams;
+    });
+
+    const signature = this.generateSignature('GET', '/v1/account/accounts', getDateTime());
+    await this.axiosInstance.post<PostBatchOrdersResponse>('/v1/order/batch-orders', orders, {
+      params: {
+        ...getDefaultQueryParams(this.accessKey),
+        Signature: signature,
+      }
+    });
   }
+
   deleteAllOrders(request: CancelOrdersRequest): Promise<void> {
     throw new Error("Method not implemented.");
   }
@@ -111,7 +163,7 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
     if (!this.credential) {
       throw new Error('No credential provided for authentication');
     }
-    const timestamp = this.getDateTime();
+    const timestamp = getDateTime();
     const signature = this.generateSignature('GET', this.config.wsPath, timestamp);
 
     const authMessage = {
@@ -134,8 +186,8 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
     this.privateWsFeed.send(JSON.stringify(authMessage));
   }
 
-  private generateSignature(method: string, path: string, timestamp: string): string {
-    const query = `AccessKeyId=${this.accessKey}&SignatureMethod=${SignatureMethod.Ed25519}&SignatureVersion=${SIGNATURE_VERSION}&Timestamp=${timestamp}`;
+  private generateSignature(method: string, path: string, parameters?: string): string {
+    const query = `AccessKeyId=${this.accessKey}&SignatureMethod=${SignatureMethod.Ed25519}&SignatureVersion=${SIGNATURE_VERSION}&Timestamp=${getDateTime()}${parameters ? `&${parameters}` : ''}`
     const preSigned = `${method}\n${this.config.wsAddress}\n${path}\n${query}`;
     const signature = sign(null, Buffer.from(preSigned), this.privateKey);
     return signature.toString('base64');
@@ -167,7 +219,39 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
   }
 
   private handleMessages(message: any, onMessage: (m: Serializable[]) => void): void {
-    // Handle messages
+    const data = JSON.parse(message);
+    const eventType = this.getEventType(data);
+    if (!eventType) {
+      logger.warn(`No handler for message: ${JSON.stringify(data)}`);
+      return;
+    }
+
+    if (eventType === HtxEvent.Ping) {
+      this.replyToPing(data.data.ts);
+      return;
+    }
+    if (eventType === HtxEvent.Subbed) {
+      logger.info(`Subscribed to ${data.ch}`);
+      return;
+    }
+    if (eventType === HtxEvent.Unsub) {
+      logger.info(`Unsubscribed from ${data.ch}`);
+      return;
+    }
+    // @ToDo: Handle other events 
+  }
+
+  private getEventType(data: any): HtxEvent | null {
+    if (data.action === 'ping') {
+      return HtxEvent.Ping;
+    }
+    if (data.action === 'sub') {
+      return HtxEvent.Subbed;
+    }
+    if (data.action === 'unsub') {
+      return HtxEvent.Unsub;
+    }
+    return null;
   }
 
   private handleClosed(code: number, reason: string, onMessage: (m: Serializable[]) => void): void {
@@ -211,11 +295,17 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
     this.privateWsFeed.send(JSON.stringify(pong));
   }
 
-  private getDateTime() {
-    const date = new Date().toISOString();
-    const [fullDate, fullTime] = date.split('T');
-    const time = fullTime.split('.')[0];
-    return `${fullDate}T${time}`;
+  private async getAccountId(): Promise<number>{
+    const signature = this.generateSignature('GET', '/v1/account/accounts');
+
+    const response: AxiosResponse<GetAccountsResponse> = await this.axiosInstance.get<GetAccountsResponse>('/v1/account/accounts', {
+      params: {
+        ...getDefaultQueryParams(this.accessKey),
+        Signature: signature,
+      }
+    });
+    const spotAccount = response.data.data.find(account => account.type === 'spot');
+    return spotAccount?.id || 0;
   }
 
 }
