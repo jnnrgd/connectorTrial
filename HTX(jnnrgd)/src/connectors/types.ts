@@ -6,14 +6,21 @@ import {
     OpenOrdersRequest,
     OrderStatusUpdate,
 } from "./private/types";
+import type WebSocket from "ws";
+
+
+export enum SignatureMethod {
+    Ed25519 = 'Ed25519',
+}
+export const SIGNATURE_VERSION = 2.1;
 
 export interface PublicExchangeConnector {
-    connect(onMessage: (m: Serializable[]) => void): Promise<void>;
+    connect(onMessage: (m: Serializable[]) => void, socket?: WebSocket): Promise<void>;
     stop(): void;
 }
 
 export interface PrivateExchangeConnector {
-    connect(onMessage: (m: Serializable[]) => void): Promise<void>;
+    connect(onMessage: (m: Serializable[]) => void, socket?: WebSocket): Promise<void>;
     stop(): void;
     getBalancePercentage(request: BalanceRequest): Promise<BalanceResponse>;
     getCurrentActiveOrders(request: OpenOrdersRequest): Promise<OrderStatusUpdate[]>
@@ -43,11 +50,13 @@ export interface ConnectorGroup {
 export interface ConnectorConfiguration {
     exchange: string;
     wsAddress: string;
+    wsPath: string;
     quoteAsset: string;
 }
 
 export interface Credential {
-    [key: string]: any;
+    privateKey: string;
+    accessKey: string;
 }
 
 export interface TopOfBook extends Serializable {

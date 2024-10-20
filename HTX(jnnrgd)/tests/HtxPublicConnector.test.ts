@@ -3,6 +3,7 @@ import { ConnectorGroup, ConnectorConfiguration, Serializable, SklEvent } from '
 import { Server as WSS, WebSocket} from 'ws';
 import { getHtxSymbol } from '../src/connectors/utils/utils';
 import logger from '../src/connectors/utils/logger';
+import * as zlib from 'zlib';
 
 
 describe('HtxPublicConnector', () => {
@@ -10,7 +11,8 @@ describe('HtxPublicConnector', () => {
     const mockConfig: ConnectorConfiguration = {
         quoteAsset: 'usdt',
         exchange: 'htx',
-        wsAddress: 'ws://127.0.0.1:12345',
+        wsAddress: '127.0.0.1:12345',
+        wsPath: ''
     };
     let server: WSS;
     let connector: HtxPublicConnector
@@ -59,8 +61,10 @@ describe('HtxPublicConnector', () => {
 
     it('should respond to ping messages with pong', async () => {
         const receivedMessages:any[] = [];
+        const pingMessage = {ping: 12345};
+        const compressedData = zlib.gzipSync(JSON.stringify(pingMessage));
         server.on('connection', (ws: WebSocket) => {
-            setTimeout(() => ws.send(JSON.stringify({ping: 12345})), 50);
+            setTimeout(() => ws.send(compressedData), 50);
             ws.on('message', (message: string) => {
                 const parsedMessage = JSON.parse(message);
                 receivedMessages.push(parsedMessage);
@@ -150,7 +154,8 @@ describe('HtxPublicConnector', () => {
                     ]
                 }
             };
-            setTimeout(() => ws.send(JSON.stringify(tradeMessage)), 50);
+            const compressed = zlib.gzipSync(JSON.stringify(tradeMessage));
+            setTimeout(() => ws.send(compressed), 50);
         });
         await connector.connect(onMessage);
 
@@ -189,8 +194,9 @@ describe('HtxPublicConnector', () => {
                   "lastPrice": 52735.63,
                   "lastSize": 0.03
                 }
-              };
-            setTimeout(() => ws.send(JSON.stringify(tickerMessage)), 50);
+            };
+            const compressed = zlib.gzipSync(JSON.stringify(tickerMessage));
+            setTimeout(() => ws.send(compressed), 50);
         });
         await connector.connect(onMessage);
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -226,7 +232,8 @@ describe('HtxPublicConnector', () => {
                   "symbol": symbol,
                 }
             };
-            setTimeout(() => ws.send(JSON.stringify(topOfBookMessage)), 50);
+            const compressed = zlib.gzipSync(JSON.stringify(topOfBookMessage));
+            setTimeout(() => ws.send(compressed), 50);
         });
         await connector.connect(onMessage);
         await new Promise(resolve => setTimeout(resolve, 100));

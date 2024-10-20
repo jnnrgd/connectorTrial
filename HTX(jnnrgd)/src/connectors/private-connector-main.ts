@@ -1,6 +1,10 @@
 import { ConnectorFactory } from "./ConnectorFactory";
 import { ConnectorGroup, Credential, ConnectorConfiguration, Serializable, PrivateExchangeConnector } from "./types";
 import logger from "./utils/logger";
+import dotenv from 'dotenv';
+
+
+dotenv.config();
 
 const connectorGroup: ConnectorGroup = {
     name: 'btc',
@@ -9,12 +13,14 @@ const connectorGroup: ConnectorGroup = {
 const connectorConfig: ConnectorConfiguration = {
     quoteAsset: 'usdt',
     exchange: 'htx',
-    wsAddress: 'wss://api.huobi.pro/ws',
+    wsAddress: process.env.HtxWsAddress || 'api.huobi.pro',
+    wsPath: process.env.HtxPrivatePath || '/ws/v2',
 };
 
 const creds: Credential = {
-    test: 'test',
-}
+    accessKey: process.env.HtxAccessKey || '',
+    privateKey: process.env.HtxPrivateKey || '',
+};
 
 const connectorInstance: PrivateExchangeConnector = ConnectorFactory.getPrivateConnector(
     connectorGroup,

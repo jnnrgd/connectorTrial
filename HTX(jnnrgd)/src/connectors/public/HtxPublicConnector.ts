@@ -36,6 +36,7 @@ export class HtxPublicConnector implements PublicExchangeConnector {
   public publicWsFeed?: WebSocket;
   private exchangeSymbol: string;
   private sklSymbol: string;
+  private url: string;
 
   constructor(
     private group: ConnectorGroup,
@@ -43,6 +44,7 @@ export class HtxPublicConnector implements PublicExchangeConnector {
     private credential?: Credential,
   ) {
     this.connectorId = uuidv4();
+    this.url = `${this.config.wsAddress}${this.config.wsPath}`;
     this.exchangeSymbol = getHtxSymbol(this.group, this.config);
     this.sklSymbol = getSklSymbol(this.group, this.config);
     this.topics = [
@@ -144,8 +146,8 @@ export class HtxPublicConnector implements PublicExchangeConnector {
   private handleMessages(message: any, onMessage: (m: Serializable[]) => void): void {
     let data: any;
     try {
-      // const decompressed = zlib.gunzipSync(message).toString('utf-8');
-      data = JSON.parse(message);
+      const decompressed = zlib.gunzipSync(message).toString('utf-8');
+      data = JSON.parse(decompressed);
     logger.debug(`Received message: ${JSON.stringify(data)}`);
     } catch (error) {
         if (error instanceof Error) {
