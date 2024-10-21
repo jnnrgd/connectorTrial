@@ -1,5 +1,10 @@
 import { Serializable, Side } from "../types";
+import WebSocket from "ws";
 
+export interface PublicExchangeConnector {
+    connect(onMessage: (m: Serializable[]) => void, socket?: WebSocket): Promise<void>;
+    stop(): void;
+}
 
 
 export type HtxTradeDirection = 'buy' | 'sell';

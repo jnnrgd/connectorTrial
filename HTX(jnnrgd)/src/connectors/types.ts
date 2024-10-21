@@ -1,16 +1,7 @@
-import type WebSocket from "ws";
-
-
 export enum SignatureMethod {
     Ed25519 = 'Ed25519',
 }
 export const SIGNATURE_VERSION = 2.1;
-
-export interface PublicExchangeConnector {
-    connect(onMessage: (m: Serializable[]) => void, socket?: WebSocket): Promise<void>;
-    stop(): void;
-}
-
 
 export interface Serializable {
 }

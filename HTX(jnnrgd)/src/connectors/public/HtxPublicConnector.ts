@@ -2,7 +2,6 @@ import {
   ConnectorConfiguration,
   ConnectorGroup,
   Credential,
-  PublicExchangeConnector,
   Serializable,
   SklEvent,
   HtxEvent,
@@ -29,6 +28,7 @@ import {
   TopOfBook,
   Ticker,
   Trade,
+  PublicExchangeConnector,
 } from "./types";
 
 import { v4 as uuidv4 } from 'uuid';
