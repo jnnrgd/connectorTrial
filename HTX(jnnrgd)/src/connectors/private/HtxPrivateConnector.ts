@@ -26,7 +26,8 @@ import { createPrivateKey, KeyObject, sign } from 'crypto';
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import { BatchCancelOrderRequest, BatchCancelOrderResponse, GetAccountBalanceResponse, GetAccountsResponse, GetOpenOrdersRequest, GetOpenOrdersResponse, OpenOrder, PostBatchOrdersRequest, PostBatchOrdersResponse, WsAccountUpdate, WsOrderUpdateEvent } from "./dtos";
 
-const MAX_BATCHH_SIZE = 50;
+const MAX_CREATE_BATCH_SIZE = 10;
+const MAX_DELETE_BATCH_SIZE = 50;
 const RATE_LIMIT = 50;
 const WAIT_TIME = 2000;
 
@@ -151,9 +152,6 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
 
   public async placeOrders(request: BatchOrdersRequest): Promise<void> {
     const path = '/v1/order/batch-orders';
-    if (request.orders.length > MAX_BATCHH_SIZE) {
-      throw new Error(`Batch size exceeds maximum of ${MAX_BATCHH_SIZE}`);
-    }
 
     const orders: PostBatchOrdersRequest[] = request.orders.map(order => {
       const orderParams: PostBatchOrdersRequest = {
@@ -167,7 +165,16 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
       return orderParams;
     });
 
-    await this.axiosInstance.post<PostBatchOrdersResponse>(path, orders);
+    const batches = splitIntoBatches<PostBatchOrdersRequest>(orders, MAX_CREATE_BATCH_SIZE);
+
+    for (let i = 0; i < batches.length; i++) {
+      if (i > 0 && i % RATE_LIMIT === 0) {
+        console.log('Pausing for rate limit...');
+        await new Promise(resolve => setTimeout(resolve, WAIT_TIME));
+      }
+      await this.axiosInstance.post<PostBatchOrdersResponse>(path, batches[i]);
+    }
+
   }
 
   public async deleteAllOrders(request: CancelOrdersRequest): Promise<void> {
@@ -178,7 +185,7 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
     const buyOrders = await this.getActiveOrders({ ...params, side: 'buy' });
     const sellOrders = await this.getActiveOrders({ ...params, side: 'sell' });
     const orderIds = [...buyOrders, ...sellOrders].map(order => order.id);
-    const batches = splitIntoBatches<number>(orderIds, MAX_BATCHH_SIZE);
+    const batches = splitIntoBatches<number>(orderIds, MAX_DELETE_BATCH_SIZE);
 
     for (let i = 0; i < batches.length; i++) {
       if (i > 0 && i % RATE_LIMIT === 0) {
