@@ -180,7 +180,7 @@ export class HtxPublicConnector implements PublicExchangeConnector {
 
     // Handle sklevent types of messages
     if (Object.values(SklEvent).includes(eventType as SklEvent)) {
-      const serializableMessages = this.createSklEvent(eventType, data, this.group);
+      const serializableMessages = this.createSklEvent(eventType, data);
       onMessage(serializableMessages);
     }
   }
@@ -234,7 +234,7 @@ export class HtxPublicConnector implements PublicExchangeConnector {
     this.publicWsFeed.send(JSON.stringify(pong));
   }
 
-  private createSklEvent(event: SklEvent, message: any, group: ConnectorGroup): Serializable[] {
+  private createSklEvent(event: SklEvent, message: any): Serializable[] {
     if (event === SklEvent.TopOfBook) {
       const marketDepth = message as HtxBestBidOffer;
       return [this.createTopOfBook(marketDepth)];

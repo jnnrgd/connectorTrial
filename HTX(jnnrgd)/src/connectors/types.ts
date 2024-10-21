@@ -33,6 +33,8 @@ export enum SklEvent {
     TopOfBook = 'TopOfBook',
     Trade = 'Trade',
     Ticker = 'Ticker',
+    Account = 'Account',
+    Order = 'Order',
 };
 
 export interface ConnectorGroup {
@@ -123,7 +125,7 @@ export interface HtxTicker {
     tick: HtxTickerTick;
 }
 
-type HtxTradeDirection = 'buy' | 'sell';
+export type HtxTradeDirection = 'buy' | 'sell';
 
 export interface HtxTradeData {
     id: number;
@@ -148,8 +150,9 @@ export interface HtxTrade {
 
 
 export interface BalanceRequest {
-
+    lastPrice: number,
 }
+
 export interface BalanceResponse {
     event: string,
     symbol: string,
@@ -158,24 +161,39 @@ export interface BalanceResponse {
     inventory: number,
     timestamp: number
 }
-export interface OpenOrdersRequest {
 
+export interface OpenOrdersRequest {
+    data: {
+        side: Side,
+        symbol: string,
+        size: number,
+    }
 }
-export interface OrderStatusUpdate {
+
+export interface OrderStatusUpdate extends Serializable {
     event: string,
     connectorType: string,
     symbol:  string,
     orderId: number,
     sklOrderId: string,
     state: string,
-    side: string,
+    side: Side,
     price: number,
     size: number,
     notional: number,
     filled_price: number,
     filled_size: number,
     timestamp: number,
+}
 
+export interface AccountStatusUpdate extends Serializable {
+    currency: string,
+    accountId: number,
+    balance: string,
+    changeType: string,
+    accountType: string,
+    seqNum: string,
+    changeTime: number
 }
 
 interface Order {
@@ -189,9 +207,8 @@ export interface BatchOrdersRequest {
     orders: Order[]
 
 }
-export interface CancelOrdersRequest {
 
-}
+export interface CancelOrdersRequest {}
 
 export enum SklOrderType {
     MARKET = 'Market',
@@ -229,47 +246,3 @@ export const htxOrderTypeMap: Record<SklOrderType, Record<Side, HtxOrderType>> =
         [Side.SELL]: HtxOrderType.SELL_IOC,
     },
 };
-
-export enum HtxOrderSource {
-    SPOT = 'spot-api',
-    MARGIN = 'margin-api',
-    C2C = 'c2c-marging-api',
-}
-
-
-export interface HtxOrderRequestParams {
-    "account-id": string,
-    symbol: string,
-    type: HtxOrderType,
-    amount: string,
-    price: string,
-    "client-order-id": string,
-    source?: HtxOrderSource,
-    "self-match-prevent"?: number,
-    "stop-price"?: string,
-    operator?: 'gte' | 'lte',
-}
-
-export interface Account{
-    id: number,
-    type: string,
-    subtype: string,
-    state: string,
-}
-
-export interface GetAccountsResponse {
-    status: number,
-    data: Account[],
-}
-
-export interface PostOrderResponse {
-    "client-order-id": string,
-    "order-id"?: number,
-    "err-code"?: string,
-    "err-msg"?: string,
-}
-
-export interface PostBatchOrdersResponse {
-    status: number,
-    data: number[],
-}

@@ -1,8 +1,10 @@
+import { OpenOrder } from "../private/dtos";
 import {
     ConnectorConfiguration,
     ConnectorGroup,
     HtxOrderType,
     htxOrderTypeMap,
+    OrderStatusUpdate,
     Side,
     SIGNATURE_VERSION,
     SignatureMethod,
@@ -32,10 +34,82 @@ export const getDefaultQueryParams = (accessKey: string) => {
     }
 };
 
-
 export function getDateTime() {
     const date = new Date().toISOString();
     const [fullDate, fullTime] = date.split('T');
-    const time = fullTime.split('.')[0];
+    const time = fullTime.split('.')[0].replace(/:/g, '%3A');
     return `${fullDate}T${time}`;
+}
+const rt = { ls: 2 }
+
+export function toAsciiOrderedQueryString(params: Record<string, any>): string {
+    const sortedKeys = Object.keys(params).sort();
+
+    const queryString = sortedKeys
+        .map(key => `${key}=${encodeURIComponent(params[key])}`)
+        .join('&');
+
+    return `${queryString}&`;
+}
+
+function toCamelCase(key: string): string {
+    return key.replace(/-([a-z])/g, (_, char) => char.toUpperCase());
+}
+
+export function transformKeysToCamelCase(obj: Record<string, any> | Array<any>): Record<string, any> | Array<any> {
+    if (Array.isArray(obj)) {
+        return obj.map(item => transformKeysToCamelCase(item));
+    } else if (obj !== null && typeof obj === 'object') {
+        return Object.keys(obj).reduce((result, key) => {
+            const newKey = toCamelCase(key);
+            (result as any)[newKey] = transformKeysToCamelCase(obj[key]);
+            return result;
+        }, {});
+    }
+    return obj;
+}
+
+function toKebabCase(key: string): string {
+    return key.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
+}
+
+export function transformKeysToKebabCase(obj: Record<string, any> | Array<any>): Record<string, any> | Array<any> {
+    if (Array.isArray(obj)) {
+        return obj.map(item => transformKeysToKebabCase(item));
+    } else if (obj !== null && typeof obj === 'object') {
+        return Object.keys(obj).reduce((result, key) => {
+            const newKey = toKebabCase(key);
+            result[newKey] = transformKeysToKebabCase(obj[key]);
+            return result;
+        }, {} as Record<string, any>);
+    }
+    return obj;
+}
+
+
+
+export function mapOrderToStatusUpdate(order: OpenOrder, side: Side): OrderStatusUpdate {
+    return {
+        symbol: order.symbol,
+        connectorType: 'HTX',
+        event: 'OrderStatusUpdate',
+        state: order.state,
+        orderId: order.id,
+        sklOrderId: order.clientOrderId,
+        side: side,
+        price: parseFloat(order.price),
+        size: parseFloat(order.amount),
+        notional: parseFloat(order.price) * parseFloat(order.amount),
+        filled_price: parseFloat(order.price),
+        filled_size: parseFloat(order.filledAmount),
+        timestamp: Date.now(),
+    };
+}
+
+export function splitIntoBatches<T>(items: T[], batchSize: number): T[][] {
+    const result: T[][] = [];
+    for (let i = 0; i < items.length; i += batchSize) {
+        result.push(items.slice(i, i + batchSize));
+    }
+    return result;
 }
