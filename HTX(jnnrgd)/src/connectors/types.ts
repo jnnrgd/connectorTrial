@@ -11,14 +11,6 @@ export interface PublicExchangeConnector {
     stop(): void;
 }
 
-export interface PrivateExchangeConnector {
-    connect(onMessage: (m: Serializable[]) => void, socket?: WebSocket): Promise<void>;
-    stop(): void;
-    getBalancePercentage(request: BalanceRequest): Promise<BalanceResponse>;
-    getCurrentActiveOrders(request: OpenOrdersRequest): Promise<OrderStatusUpdate[]>
-    placeOrders(request: BatchOrdersRequest): Promise<any> 
-    deleteAllOrders(request: CancelOrdersRequest): Promise<void> 
-}
 
 export interface Serializable {
 }
@@ -53,162 +45,10 @@ export interface Credential {
     accessKey: string;
 }
 
-export interface TopOfBook extends Serializable {
-    symbol: string;
-    connectorType: string;
-    event: 'TopOfBook';
-    timestamp: number;
-    askPrice: number;
-    askSize: number;
-    bidPrice: number;
-    bidSize: number;
-}
-
-export interface Ticker extends Serializable {
-    symbol: string;
-    connectorType: string;
-    event: 'Ticker';
-    lastPrice: number;
-    timestamp: number;
-}
-
 export enum Side {
     BUY = 'Buy',
     SELL = 'Sell',
 }
-
-export interface Trade extends Serializable {
-    symbol: string;
-    connectorType: string;
-    event: 'Trade';
-    price: number;
-    size: number;
-    side: Side;
-    timestamp: number;
-}
-
-interface HtxHtxBestBidOfferTick {
-    seqId: number;
-    ask: number;
-    askSize: number;
-    bid: number;
-    bidSize: number;
-    quoteTime: number;
-    symbol: string;
-}
-
-export interface HtxBestBidOffer {
-    ch: string;
-    ts: number;
-    tick: HtxHtxBestBidOfferTick;
-}
-
-interface HtxTickerTick {
-    open: number;
-    high: number;
-    low: number;
-    close: number;
-    amount: number;
-    vol: number;
-    count: number;
-    bid: number;
-    bidSize: number;
-    ask: number;
-    askSize: number;
-    lastPrice: number;
-    lastSize: number;
-}
-
-export interface HtxTicker {
-    ch: string;
-    ts: number;
-    tick: HtxTickerTick;
-}
-
-export type HtxTradeDirection = 'buy' | 'sell';
-
-export interface HtxTradeData {
-    id: number;
-    ts: number;
-    tradeId: number;
-    amount: number;
-    price: number;
-    direction: HtxTradeDirection;
-}
-
-interface HtxTradeTick {
-    id: number;
-    ts: number;
-    data: HtxTradeData[];
-}
-
-export interface HtxTrade {
-    ch: string;
-    ts: number;
-    tick: HtxTradeTick;
-}
-
-
-export interface BalanceRequest {
-    lastPrice: number,
-}
-
-export interface BalanceResponse {
-    event: string,
-    symbol: string,
-    baseBalance: number,
-    quoteBalance: number,
-    inventory: number,
-    timestamp: number
-}
-
-export interface OpenOrdersRequest {
-    data: {
-        side: Side,
-        symbol: string,
-        size: number,
-    }
-}
-
-export interface OrderStatusUpdate extends Serializable {
-    event: string,
-    connectorType: string,
-    symbol:  string,
-    orderId: number,
-    sklOrderId: string,
-    state: string,
-    side: Side,
-    price: number,
-    size: number,
-    notional: number,
-    filled_price: number,
-    filled_size: number,
-    timestamp: number,
-}
-
-export interface AccountStatusUpdate extends Serializable {
-    currency: string,
-    accountId: number,
-    balance: string,
-    changeType: string,
-    accountType: string,
-    seqNum: string,
-    changeTime: number
-}
-
-interface Order {
-    side: Side,
-    price: number,
-    size: number,
-    type: SklOrderType,
-}
-
-export interface BatchOrdersRequest {
-    orders: Order[]
-
-}
-
-export interface CancelOrdersRequest {}
 
 export enum SklOrderType {
     MARKET = 'Market',
@@ -216,33 +56,3 @@ export enum SklOrderType {
     LIMIT_MAKER = 'LimitMaker',
     IMMEDIATE_OR_CANCEL = 'ImmediateOrCancel',
 }
-
-export enum HtxOrderType {
-    BUY_MARKET = 'buy-market',
-    SELL_MARKET = 'sell-market',
-    BUY_LIMIT = 'buy-limit',
-    SELL_LIMIT = 'sell-limit',
-    BUY_IOC = 'buy-ioc',
-    SELL_IOC = 'sell-ioc',
-    BUY_LIMIT_MAKER = 'buy-limit-maker',
-    SELL_LIMIT_MAKER = 'sell-limit-maker',
-}
-
-export const htxOrderTypeMap: Record<SklOrderType, Record<Side, HtxOrderType>> = {
-    [SklOrderType.MARKET]: {
-        [Side.BUY]: HtxOrderType.BUY_MARKET,
-        [Side.SELL]: HtxOrderType.SELL_MARKET,
-    },
-    [SklOrderType.LIMIT]: {
-        [Side.BUY]: HtxOrderType.BUY_LIMIT,
-        [Side.SELL]: HtxOrderType.SELL_LIMIT,
-    },
-    [SklOrderType.LIMIT_MAKER]: {
-        [Side.BUY]: HtxOrderType.BUY_LIMIT_MAKER,
-        [Side.SELL]: HtxOrderType.SELL_LIMIT_MAKER,
-    },
-    [SklOrderType.IMMEDIATE_OR_CANCEL]: {
-        [Side.BUY]: HtxOrderType.BUY_IOC,
-        [Side.SELL]: HtxOrderType.SELL_IOC,
-    },
-};

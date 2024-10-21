@@ -1,4 +1,5 @@
-import { HtxOrderType, Side } from "../types";
+import { Side } from "../types";
+import { HtxOrderType } from "./types";
 
 export interface GetOpenOrdersRequest {
     accountId: string,
@@ -186,3 +187,24 @@ export type WsOrderUpdateEvent =
 | OrderMatching
 | OrderCancellation;
 
+
+export interface BalanceRequest {
+    lastPrice: number,
+}
+
+export interface BalanceResponse {
+    event: string,
+    symbol: string,
+    baseBalance: number,
+    quoteBalance: number,
+    inventory: number,
+    timestamp: number
+}
+
+export interface OpenOrdersRequest {
+    data: {
+        side: Side,
+        symbol: string,
+        size: number,
+    }
+}

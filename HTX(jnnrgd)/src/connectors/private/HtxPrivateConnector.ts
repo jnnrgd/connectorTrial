@@ -1,10 +1,8 @@
 import {
-  AccountStatusUpdate,
   ConnectorConfiguration,
   ConnectorGroup,
   Credential,
   HtxEvent,
-  PrivateExchangeConnector,
   Serializable,
   Side,
   SklEvent,
@@ -12,19 +10,35 @@ import {
 import { getDefaultQueryParams, getHtxOrderType, getHtxSymbol, getSklSymbol, mapOrderToStatusUpdate, splitIntoBatches, toAsciiOrderedQueryString, transformKeysToCamelCase, transformKeysToKebabCase } from "../utils/utils";
 import { v4 as uuidv4 } from 'uuid';
 import {
-  BalanceRequest,
-  BalanceResponse,
-  OpenOrdersRequest,
-  OrderStatusUpdate,
-  BatchOrdersRequest,
-  CancelOrdersRequest,
 } from "../types";
 import logger from "../utils/logger";
 import WebSocket from 'ws';
 import { WebSocketConnectionError, WebsocketFeedError } from "../errors";
 import { createPrivateKey, KeyObject, sign } from 'crypto';
 import axios, { AxiosInstance, AxiosResponse } from "axios";
-import { BatchCancelOrderRequest, BatchCancelOrderResponse, GetAccountBalanceResponse, GetAccountsResponse, GetOpenOrdersRequest, GetOpenOrdersResponse, OpenOrder, PostBatchOrdersRequest, PostBatchOrdersResponse, WsAccountUpdate, WsOrderUpdateEvent } from "./dtos";
+import {
+  BatchCancelOrderRequest,
+  BatchCancelOrderResponse,
+  GetAccountBalanceResponse,
+  GetAccountsResponse,
+  GetOpenOrdersRequest,
+  GetOpenOrdersResponse,
+  OpenOrder,
+  PostBatchOrdersRequest,
+  PostBatchOrdersResponse,
+  WsAccountUpdate,
+  WsOrderUpdateEvent,
+  BalanceRequest,
+  BalanceResponse,
+  OpenOrdersRequest,
+} from "./dtos";
+import {
+  PrivateExchangeConnector,
+  OrderStatusUpdate,
+  BatchOrdersRequest,
+  CancelOrdersRequest,
+  AccountStatusUpdate,
+} from "./types";
 
 const MAX_CREATE_BATCH_SIZE = 10;
 const MAX_DELETE_BATCH_SIZE = 50;

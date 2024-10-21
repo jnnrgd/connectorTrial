@@ -1,10 +1,8 @@
 import { OpenOrder } from "../private/dtos";
+import { HtxOrderType, OrderStatusUpdate } from "../private/types";
 import {
     ConnectorConfiguration,
     ConnectorGroup,
-    HtxOrderType,
-    htxOrderTypeMap,
-    OrderStatusUpdate,
     Side,
     SIGNATURE_VERSION,
     SignatureMethod,
@@ -15,7 +13,6 @@ import {
 export function getSklSymbol(group: ConnectorGroup, config: ConnectorConfiguration): string {
     return `${config.exchange}-${group.name}-${config.quoteAsset}`;
 }
-
 
 export const getHtxSymbol = (symbolGroup: ConnectorGroup, connectorConfig: ConnectorConfiguration): string => {
     return `${symbolGroup.name}${connectorConfig.quoteAsset}`
@@ -86,8 +83,6 @@ export function transformKeysToKebabCase(obj: Record<string, any> | Array<any>):
     return obj;
 }
 
-
-
 export function mapOrderToStatusUpdate(order: OpenOrder, side: Side): OrderStatusUpdate {
     return {
         symbol: order.symbol,
@@ -113,3 +108,22 @@ export function splitIntoBatches<T>(items: T[], batchSize: number): T[][] {
     }
     return result;
 }
+
+export const htxOrderTypeMap: Record<SklOrderType, Record<Side, HtxOrderType>> = {
+    [SklOrderType.MARKET]: {
+        [Side.BUY]: HtxOrderType.BUY_MARKET,
+        [Side.SELL]: HtxOrderType.SELL_MARKET,
+    },
+    [SklOrderType.LIMIT]: {
+        [Side.BUY]: HtxOrderType.BUY_LIMIT,
+        [Side.SELL]: HtxOrderType.SELL_LIMIT,
+    },
+    [SklOrderType.LIMIT_MAKER]: {
+        [Side.BUY]: HtxOrderType.BUY_LIMIT_MAKER,
+        [Side.SELL]: HtxOrderType.SELL_LIMIT_MAKER,
+    },
+    [SklOrderType.IMMEDIATE_OR_CANCEL]: {
+        [Side.BUY]: HtxOrderType.BUY_IOC,
+        [Side.SELL]: HtxOrderType.SELL_IOC,
+    },
+};

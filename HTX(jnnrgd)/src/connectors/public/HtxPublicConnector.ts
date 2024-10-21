@@ -2,16 +2,9 @@ import {
   ConnectorConfiguration,
   ConnectorGroup,
   Credential,
-  HtxBestBidOffer,
-  HtxTicker,
-  HtxTrade,
   PublicExchangeConnector,
   Serializable,
   SklEvent,
-  Ticker,
-  TopOfBook,
-  Trade,
-  HtxTradeData,
   HtxEvent,
   Side,
 } from "../types";
@@ -26,6 +19,17 @@ import {
   WebsocketFeedError,
   WebsocketNotReadyError,
 } from "../errors";
+import {
+  HtxBestBidOffer,
+  HtxTicker,
+  HtxTrade,
+  HtxTradeData,
+} from "./dtos";
+import {
+  TopOfBook,
+  Ticker,
+  Trade,
+} from "./types";
 
 import { v4 as uuidv4 } from 'uuid';
 import WebSocket from 'ws';
