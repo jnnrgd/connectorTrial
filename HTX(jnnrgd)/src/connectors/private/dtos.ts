@@ -55,24 +55,26 @@ export interface PostBatchOrdersResponse {
         orderId?: number,
         errCode?: string,
         errMsg?: string,
-    }
+    }[]
 }
 
 export interface BatchCancelOrderRequest {
     orderIds: number[],
 }
 
+export interface FailedOrder {
+    orderId: number,
+    clientOrderId: string,
+    orderState: number,
+    errCode: string,
+    errMsg: string,
+}
+
 export interface BatchCancelOrderResponse {
     status: number,
     data: {
         success: number[],
-        failed: {
-            orderId: number,
-            clientOrderId: string,
-            orderState: number,
-            errCode: string,
-            errMsg: string,
-        }[],
+        failed: FailedOrder[],
     }
 }
 

@@ -162,7 +162,6 @@ export class HtxPublicConnector implements PublicExchangeConnector {
     }
 
     const eventType = this.getEventType(data);
-
     if (!eventType) {
       logger.warn(`No handler for message: ${JSON.stringify(data)}`);
       return;

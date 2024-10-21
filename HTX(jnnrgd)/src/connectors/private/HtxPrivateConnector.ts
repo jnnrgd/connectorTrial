@@ -23,7 +23,7 @@ import {
 } from "../types";
 import logger from "../utils/logger";
 import WebSocket from 'ws';
-import { WebSocketConnectionError, WebsocketFeedError } from "../errors";
+import { AccountNotFoundError, CredentialsError, WebSocketConnectionError, WebsocketFeedError } from "../errors";
 import { createPrivateKey, KeyObject, sign } from 'crypto';
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import {
@@ -41,6 +41,7 @@ import {
   BalanceRequest,
   BalanceResponse,
   OpenOrdersRequest,
+  FailedOrder,
 } from "./dtos";
 import {
   PrivateExchangeConnector,
@@ -59,7 +60,8 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
   private accountId = 0;
   private exchangeSymbol: string;
   private sklSymbol: string;
-  private url: string;
+  private wsUrl: string;
+  private restUrl: string;
   public privateWsFeed?: WebSocket;
   private accessKey: string;
   private privateKey: KeyObject;
@@ -72,7 +74,7 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
     private credential: Credential,
   ) {
     if (!this.credential.accessKey || !this.credential.privateKey) {
-      throw new Error('No credential provided for authentication');
+      throw new CredentialsError();
     }
     this.accessKey = this.credential.accessKey;
     this.privateKey = createPrivateKey({
@@ -82,7 +84,8 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
     });
 
     this.connectorId = uuidv4();
-    this.url = `wss://${this.config.wsAddress}${this.config.wsPath}`;
+    this.wsUrl = `wss://${this.config.wsAddress}${this.config.wsPath}`;
+    this.restUrl = `https://${this.config.wsAddress}`;
 
     this.exchangeSymbol = getHtxSymbol(this.group, this.config);
     this.sklSymbol = getSklSymbol(this.group, this.config);
@@ -93,7 +96,7 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
     ];
 
     this.axiosInstance = axios.create({
-      baseURL: `https://${this.config.wsAddress}`,
+      baseURL: this.restUrl,
       headers: {
         'Content-Type': 'application/json'
       },
@@ -104,6 +107,7 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
   public async connect(onMessage: (m: Serializable[]) => void, socket?: WebSocket): Promise<void> {
     try {
       this.setupHttpClient();
+
       this.accountId = await this.getAccountId();
 
       await this.initializeWebsocket(socket);
@@ -124,9 +128,11 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
 
   public async getBalancePercentage(request: BalanceRequest): Promise<BalanceResponse> {
     const path = `/v1/account/accounts/${this.accountId}/balance`;
+
     const response: AxiosResponse<GetAccountBalanceResponse> = await this.axiosInstance.get<GetAccountBalanceResponse>(path);
     const baseAsset = this.group.name;
     const quoteAsset = this.config.quoteAsset;
+
     const quote = response.data.data.list
       .filter(d => d.currency === quoteAsset)
       .reduce((acc, curr) => ({
@@ -173,6 +179,7 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
   }
 
   public async placeOrders(request: BatchOrdersRequest): Promise<void> {
+    let failedOrders: PostBatchOrdersResponse['data'] = [];
     const path = '/v1/order/batch-orders';
 
     const orders: PostBatchOrdersRequest[] = request.orders.map(order => {
@@ -184,6 +191,7 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
         accountId: this.accountId.toString(),
         clientOrderId: uuidv4(),
       };
+
       return orderParams;
     });
 
@@ -191,10 +199,16 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
 
     for (let i = 0; i < batches.length; i++) {
       if (i > 0 && i % config.RateLimit === 0) {
-        console.log('Pausing for rate limit...');
+        logger.info('Pausing for rate limit...');
         await new Promise(resolve => setTimeout(resolve, config.WaitTime));
       }
-      await this.axiosInstance.post<PostBatchOrdersResponse>(path, batches[i]);
+
+      const response = await this.axiosInstance.post<PostBatchOrdersResponse>(path, batches[i]);
+      failedOrders = [...failedOrders, ...response.data.data.filter(order => order.errCode !== undefined)];
+    }
+
+    if (failedOrders.length > 0) {
+      logger.error(`Failed to place orders: ${JSON.stringify(failedOrders)}`);
     }
 
   }
@@ -204,17 +218,25 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
       accountId: `${this.accountId}`,
       symbol: this.exchangeSymbol,
     };
+
     const buyOrders = await this.getActiveOrders({ ...params, side: 'buy' });
     const sellOrders = await this.getActiveOrders({ ...params, side: 'sell' });
     const orderIds = [...buyOrders, ...sellOrders].map(order => order.id);
     const batches = splitIntoBatches<number>(orderIds, config.MaxDeleteBatchSize);
-
+    let failedOrders: FailedOrder[] = [];
     for (let i = 0; i < batches.length; i++) {
       if (i > 0 && i % config.RateLimit === 0) {
-        console.log('Pausing for rate limit...');
+        logger.info('Pausing for rate limit...');
         await new Promise(resolve => setTimeout(resolve, config.WaitTime));
       }
-      await this.cancelBatchOrders(batches[i]);
+
+      const response = await this.cancelBatchOrders(batches[i]);
+      if (response.data.failed.length > 0) {
+        failedOrders = [...failedOrders, ...response.data.failed];
+      }
+    }
+    if (failedOrders.length > 0) {
+      logger.error(`Failed to cancel orders: ${JSON.stringify(failedOrders)}`);
     }
   }
 
@@ -260,7 +282,7 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
   private async initializeWebsocket(socket?: WebSocket): Promise<void> {
     return new Promise((resolve, reject) => {
       logger.info(`Attempting to connect to ${this.config.exchange} public websocket feed`);
-      this.privateWsFeed = socket || new WebSocket(this.url);
+      this.privateWsFeed = socket || new WebSocket(this.wsUrl);
 
       this.privateWsFeed.on('open', () => {
         logger.info(`WebSocket connection established with HTX`);
@@ -278,8 +300,9 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
 
   private authenticateWebsocket() {
     if (!this.credential) {
-      throw new Error('No credential provided for authentication');
+      throw new CredentialsError();
     }
+
     const defaultParams = getDefaultQueryParams(this.accessKey);
     const signature = this.generateSignature('GET', this.config.wsPath, defaultParams);
 
@@ -300,6 +323,7 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
       throw new WebsocketFeedError;
     }
 
+    logger.info('Authenticating WebSocket connection');
     this.privateWsFeed.send(JSON.stringify(authMessage));
   }
 
@@ -347,6 +371,8 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
 
   private handleMessages(message: any, onMessage: (m: Serializable[]) => void): void {
     const data = JSON.parse(message);
+    logger.info(`Private websocket message: ${message}`);
+
     const eventType = this.getEventType(data);
     if (!eventType) {
       logger.warn(`No handler for message: ${JSON.stringify(data)}`);
@@ -373,16 +399,20 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
 
   private createSklEvent(eventType: SklEvent, data: any): Serializable[] {
     if (eventType === SklEvent.Account) {
+      logger.info(`Account update: ${JSON.stringify(data)}`);
       const accountUpdate = data as WsAccountUpdate;
       return [this.createAccountUpdateEvent(accountUpdate)];
     }
     if (eventType === SklEvent.Order) {
+      logger.info(`Order update: ${JSON.stringify(data)}`);
       const orderUpdate = data as WsOrderUpdateEvent;
       return [this.createOrderUpdateEvent(orderUpdate)];
     }
     return [];
   }
+
   private createOrderUpdateEvent(orderUpdate: WsOrderUpdateEvent): OrderStatusUpdate {
+    const eventType = orderUpdate.eventType;
     let orderStatusUpdate: OrderStatusUpdate = {
       event: orderUpdate.eventType,
       connectorType: 'HTX',
@@ -398,7 +428,7 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
       filled_size: 0,
       timestamp: Date.now(),
     };
-    switch (orderUpdate.eventType) {
+    switch (eventType) {
       case 'trigger':
       case 'deletion':
         if ('orderSide' in orderUpdate) {
@@ -467,7 +497,7 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
         break;
 
       default:
-        console.warn("Unknown event type");
+        logger.warn(`Unhandled order update event type: ${eventType}`);
     }
 
     return orderStatusUpdate;
@@ -517,6 +547,7 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
   }
 
   private generateSignature(method: string, path: string, parameters: Record<string, any>): string {
+    logger.info('Generating signature for %s request to %s', method, path);
     const orderedParams = toAsciiOrderedQueryString(parameters);
     const preSigned = `${method}\n${this.config.wsAddress}\n${path}\n${orderedParams}`;
     const signature = sign(null, Buffer.from(preSigned), this.privateKey);
@@ -530,19 +561,24 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
     const pong = {
       action: 'pong',
       data: {
-        ts: ts,
+        ts,
       }
     };
     this.privateWsFeed.send(JSON.stringify(pong));
   }
 
   private async getAccountId(): Promise<number> {
+    logger.info('Getting account id');
     const response: AxiosResponse<GetAccountsResponse> = await this.axiosInstance.get<GetAccountsResponse>('/v1/account/accounts');
     const spotAccount = response.data.data.find(account => account.type === 'spot');
-    return spotAccount?.id || 0;
+    if (!spotAccount) {
+      throw new AccountNotFoundError();
+    }
+    return spotAccount.id;
   }
 
   private async getActiveOrders(params: GetOpenOrdersRequest & { side: string }): Promise<OpenOrder[]> {
+    logger.info('Getting active %s orders', params.side);
     const response: AxiosResponse<GetOpenOrdersResponse> = await this.axiosInstance.get<GetOpenOrdersResponse>(
       '/v1/order/openOrders',
       { params }
@@ -557,6 +593,7 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
       orderIds,
     };
 
+    logger.info('Cancelling %d orders', orderIds.length);
     const response: AxiosResponse<BatchCancelOrderResponse> = await this.axiosInstance.post<BatchCancelOrderResponse>(
       path,
       params,
