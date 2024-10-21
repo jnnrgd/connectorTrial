@@ -7,7 +7,17 @@ import {
   Side,
   SklEvent,
 } from "../types";
-import { getDefaultQueryParams, getHtxOrderType, getHtxSymbol, getSklSymbol, mapOrderToStatusUpdate, splitIntoBatches, toAsciiOrderedQueryString, transformKeysToCamelCase, transformKeysToKebabCase } from "../utils/utils";
+import {
+  getDefaultQueryParams,
+  getHtxOrderType,
+  getHtxSymbol,
+  getSklSymbol,
+  mapOrderToStatusUpdate,
+  splitIntoBatches,
+  toAsciiOrderedQueryString,
+  transformKeysToCamelCase,
+  transformKeysToKebabCase
+} from "../utils/utils";
 import { v4 as uuidv4 } from 'uuid';
 import {
 } from "../types";
@@ -39,11 +49,9 @@ import {
   CancelOrdersRequest,
   AccountStatusUpdate,
 } from "./types";
-
-const MAX_CREATE_BATCH_SIZE = 10;
-const MAX_DELETE_BATCH_SIZE = 50;
-const RATE_LIMIT = 50;
-const WAIT_TIME = 2000;
+import {
+  config,
+} from "../config";
 
 
 export class HtxPrivateConnector implements PrivateExchangeConnector {
@@ -179,12 +187,12 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
       return orderParams;
     });
 
-    const batches = splitIntoBatches<PostBatchOrdersRequest>(orders, MAX_CREATE_BATCH_SIZE);
+    const batches = splitIntoBatches<PostBatchOrdersRequest>(orders, config.MaxCreateBatchSize);
 
     for (let i = 0; i < batches.length; i++) {
-      if (i > 0 && i % RATE_LIMIT === 0) {
+      if (i > 0 && i % config.RateLimit === 0) {
         console.log('Pausing for rate limit...');
-        await new Promise(resolve => setTimeout(resolve, WAIT_TIME));
+        await new Promise(resolve => setTimeout(resolve, config.WaitTime));
       }
       await this.axiosInstance.post<PostBatchOrdersResponse>(path, batches[i]);
     }
@@ -199,12 +207,12 @@ export class HtxPrivateConnector implements PrivateExchangeConnector {
     const buyOrders = await this.getActiveOrders({ ...params, side: 'buy' });
     const sellOrders = await this.getActiveOrders({ ...params, side: 'sell' });
     const orderIds = [...buyOrders, ...sellOrders].map(order => order.id);
-    const batches = splitIntoBatches<number>(orderIds, MAX_DELETE_BATCH_SIZE);
+    const batches = splitIntoBatches<number>(orderIds, config.MaxDeleteBatchSize);
 
     for (let i = 0; i < batches.length; i++) {
-      if (i > 0 && i % RATE_LIMIT === 0) {
+      if (i > 0 && i % config.RateLimit === 0) {
         console.log('Pausing for rate limit...');
-        await new Promise(resolve => setTimeout(resolve, WAIT_TIME));
+        await new Promise(resolve => setTimeout(resolve, config.WaitTime));
       }
       await this.cancelBatchOrders(batches[i]);
     }

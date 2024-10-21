@@ -28,6 +28,7 @@ export interface ConnectorConfiguration {
     exchange: string;
     wsAddress: string;
     wsPath: string;
+    restAddress: string;
     quoteAsset: string;
 }
 

@@ -1,6 +1,8 @@
 import { HtxPublicConnector } from "./public/HtxPublicConnector";
 import { HtxPrivateConnector } from "./private/HtxPrivateConnector";
-import { ConnectorGroup, PublicExchangeConnector, Credential, ConnectorConfiguration, PrivateExchangeConnector } from "./types";
+import { ConnectorGroup, Credential, ConnectorConfiguration } from "./types";
+import { PublicExchangeConnector } from "./public/types";
+import { PrivateExchangeConnector } from "./private/types";
 
 export class ConnectorFactory {
     public static getPublicConnector(group: ConnectorGroup, config: ConnectorConfiguration, credential?: Credential): PublicExchangeConnector {
